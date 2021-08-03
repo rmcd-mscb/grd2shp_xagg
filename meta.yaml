@@ -19,7 +19,8 @@ requirements:
 test:
   # Some packages might need a `test/commands` key to check CLI.
   # List all the packages/modules that `run_test.py` imports.
-  imports: []  # <-- remove the brackets if actually importing here.
+  imports:
+    [] # <-- remove the brackets if actually importing here.
     # - some_package
   requires:
     - pytest
@@ -30,9 +31,9 @@ about:
   home: https://github.com/rmcd-mscb/grd2shp_xagg
   license: MIT
   license_file: LICENSE.rst
-  summary: 'Interpolate gridded input to geometry polygons'
+  summary: "Interpolate gridded input to geometry polygons"
   # The remaining entries in this section are optional, but recommended.
-  description: 'This package serves as an interface to the xagg package for interpolating climate fording datasets to hydrologic model fabrics.'
+  description: "This package serves as an interface to the xagg package for interpolating climate fording datasets to hydrologic model fabrics."
   doc_url: https://grd2shp_xagg.readthedocs.io/
   dev_url: https://github.com/rmcd-mscb/grd2shp_xagg
 

@@ -22,4 +22,3 @@ SPLIT_BEFORE_EXPRESSION_AFTER_OPENING_PAREN = true
 DISABLE_ENDING_COMMA_HEURISTIC = true
 rst-roles = class,func,ref,attr
 rst-directives = envvar,exception,autoattribute,autofunction
-

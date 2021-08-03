@@ -42,4 +42,4 @@ warn_unused_ignores = false
 [[tool.mypy.overrides]]
 module = "noxfile"
 warn_unreachable = false
-disallow_untyped_decorators = false 
+disallow_untyped_decorators = false
