@@ -1,0 +1,21 @@
+---
+name: grd2shp_xagg
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.8
+  - pip
+  # Production dependencies defined here (as well as in requirements.txt)
+  - click
+  - pygeoapi
+  - xagg
+  - pandas
+  - geopandas
+  - rasterstats
+  - xarray
+  - dask
+  - bottleneck
+  - numpy
+  - metpy
+  - netcdf4
+

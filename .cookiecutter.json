@@ -1,0 +1,14 @@
+{
+    "_template": "git+ssh://git@code.usgs.gov/wma/nhgf/pygeoapi-plugin-cookiecutter.git",
+    "author": "rmcd@usgs.gov",
+    "description": "This package serves as an interface to the xagg package for interpolating climate fording datasets to hydrologic model fabrics.",
+    "development_status": "Development Status :: 1 - Planning",
+    "email": "rmcd@usgs.gov",
+    "friendly_name": "Grd2Shp_Xagg",
+    "github_user": "rmcd-mscb",
+    "license": "MIT",
+    "package_name": "grd2shp_xagg",
+    "project_name": "grd2shp_xagg",
+    "summary": "Interpolate gridded input to geometry polygons",
+    "version": "0.0.1-dev0"
+}

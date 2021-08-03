@@ -1,0 +1,13 @@
+# Production dependencies, also should be specified in environment.yml
+click
+pygeoapi
+xagg
+pandas
+geopandas
+rasterstats
+xarray
+dask
+bottleneck
+numpy
+metpy
+netcdf4
