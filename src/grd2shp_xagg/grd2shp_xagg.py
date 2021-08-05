@@ -1,15 +1,18 @@
 """Module to interpolate gridded climate forcings to geometry."""
 import datetime
+import pickle  # noqa: S403
 import sys
+import xagg as xa
 from pathlib import Path
 
 import geopandas as gpd
 import metpy.calc as mpcalc
 import netCDF4
 import numpy as np
-import pandas as pd
 import xarray as xr
 from metpy.units import units
+
+# import pandas as pd
 
 
 # prsr = 101.3 * (((293.0-0.0065*Hru_elev_meters(i))/293.0)**5.26)
@@ -67,7 +70,7 @@ def np_get_wval(ndata, wghts, hru_id=0, verbose=False):
         return tmp
 
 
-class Grd2Shp:
+class Grd2ShpXagg:
     """Class to map or interpolate gridded data (netCDF, Grib).
 
     Data (focused on climate for now) onto geometry (Polygon) using
@@ -80,7 +83,7 @@ class Grd2Shp:
         self.grd = None
         self.calctype = {0: "area-weighted average", 1: "zonal average"}
         self.type = None
-        self.wght_file = None
+        self.wieghts = None
         self.wght_id = None
         self.gdf = None
         self.gdf1 = None
@@ -99,6 +102,7 @@ class Grd2Shp:
         self._end_date = None
         self.current_time = None
         self.current_time_index = None
+        self.mapped_vars = []
 
     def initialize(
         self,
@@ -166,7 +170,8 @@ class Grd2Shp:
         self.valid_calctype(ctype=ctype)
 
         try:
-            self.wght_file = pd.read_csv(wght_file)
+            with open(wght_file) as file:
+                self.wght_file = pickle.load(file)  # noqa: S301
         except IOError as ie:
             raise IOError(f"Weight File error: {ie}")
 
@@ -176,28 +181,14 @@ class Grd2Shp:
         except IOError as ie:
             raise IOError(f"Geometry File error: {ie}")
 
-        # grab the geom_id from the weights file and use as identifier below
-        self.wght_id = self.wght_file.columns[1]
-
-        # this geodataframe merges all hru-ids and dissolves so the length of the index
-        # equals the number of hrus
-        self.gdf1 = self.gdf.sort_values(self.wght_id).dissolve(by=self.wght_id)
-        self.numgeom = len(self.gdf1.index)
-        self.geomindex = np.asarray(self.gdf1.index, dtype=np.int)
-
-        # group by the weights_id for processing
-        self.unique_geom_ids = self.wght_file.groupby(self.wght_id)
-
         # grab some helpful vars. Assumption is dims are same for all vars!
         self.numvars = len(self.var)
         self.numtimesteps = self.grd[0].dims[self.time_var]
         self.str_start = np.datetime_as_string(self.grd[0][self.time_var][0], unit="D")
         self._start_date = self.grd[0][self.time_var][0]
         self._end_date = self.grd[0][self.time_var][self.numtimesteps - 1]
-        self.current_time_index = 0
-        self.current_time = self.grd[0][self.time_var][self.current_time_index]
 
-        self._np_var = np.zeros((self.numvars, self.numtimesteps, self.numgeom))
+        self._np_var = np.zeros((self.numvars, self.numgeom, self.numtimesteps))
         print(f"numtimesteps: {self.numtimesteps} and Start date: {self.str_start}")
 
     def valid_grd(self, grd):
@@ -304,35 +295,11 @@ class Grd2Shp:
         """Run weights."""
         for index, tvar in enumerate(self.var):
             grid = self.grd[index]
-
-            timestep = self.current_time_index
-            print(f"Processing timestep: {timestep}", flush=True)
-
-            val_interp = np.zeros(self.numgeom)
-            val_flat_interp = grid[tvar].values[timestep, :, :].flatten(order="K")
-
-            for i in np.arange(len(self.geomindex)):
-                try:
-                    weight_id_rows = self.unique_geom_ids.get_group(self.geomindex[i])
-                    tw = weight_id_rows.w.values
-                    tgid = weight_id_rows.grid_ids.values
-                    tmp = getaverage(val_flat_interp[tgid], tw)
-                    if np.isnan(tmp):
-                        val_interp[i] = np_get_wval(
-                            val_flat_interp[tgid], tw, self.geomindex[i]
-                        )
-                    else:
-                        val_interp[i] = tmp
-                except KeyError:
-                    val_interp[i] = netCDF4.default_fillvals["f8"]
-
-                if i % 10000 == 0:
-                    print(f"    Processing {tvar} for hru {i}", flush=True)
-
-            self._np_var[index, timestep, :] = val_interp[:]
-
-        self.current_time_index += 1
-        # self.current_time = self.grd[0][self.time_var][self.current_time_index]
+            aggragated = xa.aggregate(grid, self.wieghts)
+            # aggragated.agg is a pandas series of values the most simple
+            # way I found to map to numpy array is as follows
+            for gindex, value in aggragated.agg[tvar].items():
+                self._np_var[index, gindex, :] = value[0]
 
     @property
     def start_date(self):
@@ -412,7 +379,7 @@ class Grd2Shp:
 
         for index, tvar in enumerate(self.var_output):
             vartype = self.grd[index][self.var[index]].dtype
-            ncvar = ncfile.createVariable(tvar, vartype, ("time", "geomid"))
+            ncvar = ncfile.createVariable(tvar, vartype, ("geomid", "time"))
             ncvar.fill_value = netCDF4.default_fillvals["f8"]
             ncvar.long_name = self.grd[index][self.var[index]].long_name
             ncvar.standard_name = self.grd[index][self.var[index]].standard_name
@@ -490,7 +457,7 @@ class Grd2Shp:
                 rhmin = mpcalc.relative_humidity_from_specific_humidity(pr, tmin, spch)
                 rel_h[i, j] = (rhmin.magnitude + rhmax.magnitude) / 2.0
 
-        ncvar = ncfile.createVariable("humidity", rel_h.dtype, ("time", "geomid"))
+        ncvar = ncfile.createVariable("humidity", rel_h.dtype, ("geomid", "time"))
         ncvar.units = "1"
         ncvar.fill_value = netCDF4.default_fillvals["f8"]
         ncvar[:, :] = rel_h[0 : self.current_time_index, :]
