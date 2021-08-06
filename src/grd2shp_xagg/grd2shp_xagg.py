@@ -4,6 +4,7 @@ import pickle  # noqa: S403
 import sys
 import xagg as xa
 from pathlib import Path
+from xagg.export import prep_for_nc
 
 import geopandas as gpd
 import metpy.calc as mpcalc
@@ -170,8 +171,8 @@ class Grd2ShpXagg:
         self.valid_calctype(ctype=ctype)
 
         try:
-            with open(wght_file) as file:
-                self.wght_file = pickle.load(file)  # noqa: S301
+            with open(wght_file, "rb") as file:
+                self.wieghts = pickle.load(file)  # noqa: S301
         except IOError as ie:
             raise IOError(f"Weight File error: {ie}")
 
@@ -294,12 +295,12 @@ class Grd2ShpXagg:
     def run_weights(self):
         """Run weights."""
         for index, tvar in enumerate(self.var):
+            print(f"generating mapped vales for {tvar} ...")
             grid = self.grd[index]
             aggragated = xa.aggregate(grid, self.wieghts)
-            # aggragated.agg is a pandas series of values the most simple
-            # way I found to map to numpy array is as follows
-            for gindex, value in aggragated.agg[tvar].items():
-                self._np_var[index, gindex, :] = value[0]
+            xr_agg = prep_for_nc(aggragated)
+            self.mapped_vars.append(xr_agg)
+            print(f"finished mapped values for {tvar}")
 
     @property
     def start_date(self):
@@ -337,14 +338,23 @@ class Grd2ShpXagg:
         """
         return self.numtimesteps
 
-    @property
-    def current_mapped_data(self):
-        """Return currently mapped data.
+    def mapped_data(self, var):
+        """Return xarray of mapped data by var.
+
+        Args:
+            var (string): Should be value in self.var
 
         Returns:
-            numpy array: currently mapped array
+            xarray: Mapped values
         """
-        return self._np_var[:, self.current_time_index, :]
+        print(var)
+        try:
+            index = self.var_output.index(var)
+        except ValueError as ve:
+            print(f"val not in {self.var}", ve)
+            return
+
+        return self.mapped_vars[index]
 
     def write_file(  # noqa: C901
         self, elev_file, punits=0, datetag=None, filename=None, append=False
