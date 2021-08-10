@@ -2,12 +2,12 @@
 import gridmet_cfsv2 as gm
 import pickle  # noqa: S403
 import time
-import xagg as xa
-from xagg.export import prep_for_nc
 
 import geopandas as gpd
 import numpy as np
+import xagg as xa
 import xarray as xr
+from xagg.export import prep_for_nc
 
 # import grd2shp_xagg
 
