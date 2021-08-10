@@ -87,7 +87,6 @@ class Grd2ShpXagg:
         self.wieghts = None
         self.wght_id = None
         self.gdf = None
-        self.gdf1 = None
         self.numgeom = 0
         self.numtimesteps = None
         self.unique_geom_ids = None
@@ -115,8 +114,6 @@ class Grd2ShpXagg:
         lon_var,
         var,
         var_output,
-        opath,
-        fileprefix,
         ctype,
     ):
         """Initialize.
@@ -130,8 +127,6 @@ class Grd2ShpXagg:
             lon_var ([type]): [description]
             var ([type]): [description]
             var_output ([type]): [description]
-            opath ([type]): [description]
-            fileprefix ([type]): [description]
             ctype ([type]): [description]
 
         Raises:
@@ -143,12 +138,7 @@ class Grd2ShpXagg:
         self.valid_shp(shp)
 
         self.shp = shp
-        stringdict = {
-            "time_var": time_var,
-            "lat_var": lat_var,
-            "lon_var": lon_var,
-            "fileprefix": fileprefix,
-        }
+        stringdict = {"time_var": time_var, "lat_var": lat_var, "lon_var": lon_var}
 
         for key, value in stringdict.items():
             if not isinstance(value, str):
@@ -156,16 +146,9 @@ class Grd2ShpXagg:
         self.time_var = time_var
         self.lat_var = lat_var
         self.lon_var = lon_var
-        self.fileprefix = fileprefix
 
         self.valid_var(var=var, grd=grd)
         self.valid_var_ouput(var_output=var_output, var=var)
-
-        self.opath = Path(opath)
-        if self.opath.exists():
-            print("output path exists", flush=True)
-        else:
-            sys.exit(f"Output Path does not exist: {self.opath} - EXITING")
 
         # assert(calctype in self.calctype)
         self.valid_calctype(ctype=ctype)
@@ -356,136 +339,164 @@ class Grd2ShpXagg:
 
         return self.mapped_vars[index]
 
-    def write_file(  # noqa: C901
-        self, elev_file, punits=0, datetag=None, filename=None, append=False
-    ):
-        """Write netcdf file of resulting interpolation.
+    def write_gmcfsv2_file(self, opath, prefix, elev_file, punits=0):  # noqa: C901
+        """Write netcdf file.
+
+        Write netCDF file of gridMET cfsv2 climate forcing by variable and ensemble.
 
         Args:
+            opath ([type]): [description]
+            prefix ([type]): [description]
             elev_file ([type]): [description]
             punits (int, optional): [description]. Defaults to 0.
-            datetag ([type], optional): [description]. Defaults to None.
-            filename ([type], optional): [description]. Defaults to None.
-            append (bool, optional): [description]. Defaults to False.
-
         """
-        if datetag is None:
-            datetag = str(datetime.datetime.now().strftime("%Y_%m_%d"))
-
-        if not append:
-            ncfile = self.create_ncf(datetag)
-        else:
-            ncfile = netCDF4.Dataset(
-                self.opath
-                / (
-                    self.fileprefix
-                    + "climate_"
-                    + str(datetime.datetime.now().strftime("%Y%m%d"))
-                    + ".nc"
-                ),
-                mode="a",
-                format="NETCDF_CLASSIC",
-            )
-
         for index, tvar in enumerate(self.var_output):
-            vartype = self.grd[index][self.var[index]].dtype
-            ncvar = ncfile.createVariable(tvar, vartype, ("geomid", "time"))
-            ncvar.fill_value = netCDF4.default_fillvals["f8"]
-            ncvar.long_name = self.grd[index][self.var[index]].long_name
-            ncvar.standard_name = self.grd[index][self.var[index]].standard_name
-            ncvar.description = self.grd[index][self.var[index]].description
-            # ncvar.grid_mapping = 'crs'
-            ncvar.units = self.grd[index][self.var[index]].units
-            if tvar in ["tmax", "tmin"]:
-                if punits == 1:
-                    conv = units.degC
-                    ncvar[:, :] = (
-                        units.Quantity(
-                            self._np_var[index, 0 : self.current_time_index, :],
-                            ncvar.units,
-                        )
-                        .to(conv)
-                        .magnitude
-                    )
-                    ncvar.units = conv.format_babel()
-                else:
-                    conv = units.degF
-                    ncvar[:, :] = (
-                        units.Quantity(
-                            self._np_var[index, 0 : self.current_time_index, :],
-                            ncvar.units,
-                        )
-                        .to(conv)
-                        .magnitude
-                    )
-                    ncvar.units = conv.format_babel()
-            elif tvar == "prcp":
-                if punits == 1:
-                    conv = units("mm")
-                    ncvar[:, :] = (
-                        units.Quantity(
-                            self._np_var[index, 0 : self.current_time_index, :],
-                            ncvar.units,
-                        )
-                        .to(conv)
-                        .magnitude
-                    )
-                    ncvar.units = conv.units.format_babel()
-                else:
-                    conv = units("inch")
-                    ncvar[:, :] = (
-                        units.Quantity(
-                            self._np_var[index, 0 : self.current_time_index, :],
-                            ncvar.units,
-                        )
-                        .to(conv)
-                        .magnitude
-                    )
-                    ncvar.units = conv.units.format_babel()
-            else:
-                ncvar[:, :] = self._np_var[index, 0 : self.current_time_index, :]
+            time_index = self.mapped_vars[index][self.var[index]].dims.index("time")
+            num_ensembles = self.mapped_vars[index][self.var[index]].shape[time_index]
+            for eindex in np.arange(num_ensembles):
+                postfix = "_" + str(eindex)
+                ncfile = self.create_ncf(opath, prefix=prefix, postfix=postfix)
+                vartype = self.mapped_vars[index][self.var[index]].dtype
+                ncvar = ncfile.createVariable(tvar, vartype, ("geomid", "time"))
+                ncvar.fill_value = netCDF4.default_fillvals["f8"]
+                ncvar.long_name = self.grd[index][self.var[index]].long_name
+                ncvar.standard_name = self.grd[index][self.var[index]].standard_name
+                ncvar.description = self.grd[index][self.var[index]].description
+                ds = self.mapped_vars[index][self.var[index]].isel(time=eindex)
+                # ncvar.grid_mapping = 'crs'
                 ncvar.units = self.grd[index][self.var[index]].units
+                if tvar in ["tmax", "tmin"]:
+                    if punits == 1:
+                        conv = units.degC
+                        ncvar[:, :] = (
+                            units.Quantity(
+                                ds.values[:, 0:30],
+                                ncvar.units,
+                            )
+                            .to(conv)
+                            .magnitude
+                        )
+                        ncvar.units = conv.format_babel()
+                    else:
+                        conv = units.degF
+                        ncvar[:, :] = (
+                            units.Quantity(
+                                ds.values[:, 0:30],
+                                ncvar.units,
+                            )
+                            .to(conv)
+                            .magnitude
+                        )
+                        ncvar.units = conv.format_babel()
+                elif tvar == "prcp":
+                    if punits == 1:
+                        conv = units("mm")
+                        ncvar[:, :] = (
+                            units.Quantity(
+                                ds.values[:, 0:30],
+                                ncvar.units,
+                            )
+                            .to(conv)
+                            .magnitude
+                        )
+                        ncvar.units = conv.units.format_babel()
+                    else:
+                        conv = units("inch")
+                        ncvar[:, :] = (
+                            units.Quantity(
+                                ds.values[:, 0:30],
+                                ncvar.units,
+                            )
+                            .to(conv)
+                            .magnitude
+                        )
+                        ncvar.units = conv.units.format_babel()
+                else:
+                    ncvar[:, :] = (ds.values[:, 0:30],)
+                    ncvar.units = self.grd[index][self.var[index]].units
 
-        elevf = gpd.read_file(elev_file, layer="hru_elev")
-        elev = elevf["hru_elev"].values
+                elevf = gpd.read_file(elev_file, layer="hru_elev")
+                elev = elevf["hru_elev"].values
 
-        if all(x in self.var_output for x in ["tmax", "tmin", "shum"]):
-            tmax_ind = self.var_output.index("tmax")
-            tmin_ind = self.var_output.index("tmin")
-            shum_ind = self.var_output.index("shum")
+                if all(x in self.var_output for x in ["tmax", "tmin", "shum"]):
+                    tmax_ind = self.var_output.index("tmax")
+                    tmin_ind = self.var_output.index("tmin")
+                    shum_ind = self.var_output.index("shum")
 
-        print(f"tmaxind: {tmax_ind}, tminind: {tmin_ind}, shumind: {shum_ind}")
+                    print(
+                        f"tmaxind: {tmax_ind}, "
+                        f"tminind: {tmin_ind}, "
+                        f"shumind: {shum_ind}"
+                    )
 
-        rel_h = np.zeros((self.current_time_index, self.numgeom))
-        for j in np.arange(np.int(self.numgeom)):
-            pr = mpcalc.height_to_pressure_std(units.Quantity(elev[j], "m"))
-            for i in np.arange(np.int(self.current_time_index)):
-                tmax = units.Quantity(self._np_var[tmax_ind, i, j], units.kelvin)
-                tmin = units.Quantity(self._np_var[tmin_ind, i, j], units.kelvin)
-                spch = units.Quantity(self._np_var[shum_ind, i, j], "kg/kg")
-                rhmax = mpcalc.relative_humidity_from_specific_humidity(pr, tmax, spch)
-                rhmin = mpcalc.relative_humidity_from_specific_humidity(pr, tmin, spch)
-                rel_h[i, j] = (rhmin.magnitude + rhmax.magnitude) / 2.0
+                    rel_h = np.zeros((self.current_time_index, self.numgeom))
+                    for j in np.arange(np.int(self.numgeom)):
+                        pr = mpcalc.height_to_pressure_std(units.Quantity(elev[j], "m"))
+                        for i in np.arange(np.int(self.current_time_index)):
+                            dstmax = (
+                                self.mapped_vars[tmax_ind][self.var[tmax_ind]]
+                                .isel(time=eindex)
+                                .values
+                            )
+                            tmax = units.Quantity(dstmax, units.kelvin)
+                            dstmin = (
+                                self.mapped_vars[tmin_ind][self.var[tmin_ind]]
+                                .isel(time=eindex)
+                                .values
+                            )
+                            tmin = units.Quantity(dstmin, units.kelvin)
+                            dsspch = (
+                                self.mapped_vars[shum_ind][self.var[shum_ind]]
+                                .isel(time=eindex)
+                                .values
+                            )
+                            spch = units.Quantity(dsspch, "kg/kg")
+                            rhmax = mpcalc.relative_humidity_from_specific_humidity(
+                                pr, tmax, spch
+                            )
+                            rhmin = mpcalc.relative_humidity_from_specific_humidity(
+                                pr, tmin, spch
+                            )
+                            rel_h[i, j] = (rhmin.magnitude + rhmax.magnitude) / 2.0
 
-        ncvar = ncfile.createVariable("humidity", rel_h.dtype, ("geomid", "time"))
-        ncvar.units = "1"
-        ncvar.fill_value = netCDF4.default_fillvals["f8"]
-        ncvar[:, :] = rel_h[0 : self.current_time_index, :]
+                    ncvar = ncfile.createVariable(
+                        "humidity", rel_h.dtype, ("geomid", "time")
+                    )
+                    ncvar.units = "1"
+                    ncvar.fill_value = netCDF4.default_fillvals["f8"]
+                    ncvar[:, :] = rel_h[:, 0:30]
 
-        ncfile.close()
+            ncfile.close()
 
-    def create_ncf(self, datetag):
+    def create_ncf(self, opath, prefix=None, postfix=None, datetag=None):
         """Create netCDF file.
 
         Args:
+            prefix ([type]): [description]
+            postfix ([type]): [description]
+            opath ([type]): [description]
             datetag ([type]): [description]
 
         Returns:
             [type]: [description]
         """
+        opath = Path(opath)
+        if opath.exists():
+            print("output path exists", flush=True)
+        else:
+            sys.exit(f"Output Path does not exist: {opath} - EXITING")
+
+        if prefix is None:
+            prefix = "t_"
+
+        if postfix is None:
+            postfix = "_1"
+
+        if datetag is None:
+            datetag = str(datetime.datetime.now().strftime("%Y_%m_%d"))
+
         ncfile = netCDF4.Dataset(
-            self.opath
-            / (self.fileprefix + "climate_" + datetag.strftime("%Y_%m_%d") + ".nc"),
+            opath / (prefix + "climate_" + datetag + postfix + ".nc"),
             mode="w",
             format="NETCDF4_CLASSIC",
         )
@@ -493,7 +504,7 @@ class Grd2ShpXagg:
         def getxy(pt):
             return pt.x, pt.y
 
-        centroidseries = self.gdf1.geometry.centroid.to_crs(epsg=4327)
+        centroidseries = self.gdf.geometry.centroid.to_crs(epsg=4327)
         tlon, tlat = [list(t) for t in zip(*map(getxy, centroidseries))]
 
         # Global Attributes
@@ -501,7 +512,7 @@ class Grd2ShpXagg:
         ncfile.featureType = "timeSeries"
         ncfile.history = ""
 
-        sp_dim = len(self.gdf1.index)
+        sp_dim = len(self.gdf.index)
         # Create dimensions
 
         ncfile.createDimension("geomid", size=sp_dim)  # hru_id
@@ -520,7 +531,7 @@ class Grd2ShpXagg:
         hru = ncfile.createVariable("geomid", "i", ("geomid",))
         hru.cf_role = "timeseries_id"
         hru.long_name = "local model hru id"
-        hru[:] = np.asarray(self.gdf1.index)
+        hru[:] = np.asarray(self.gdf.index)
 
         lat = ncfile.createVariable("hru_lat", np.dtype(np.float32).char, ("geomid",))
         lat.long_name = "Latitude of HRU centroid"

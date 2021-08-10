@@ -18,3 +18,4 @@ dependencies:
   - numpy
   - metpy
   - netcdf4
+  - pickle
