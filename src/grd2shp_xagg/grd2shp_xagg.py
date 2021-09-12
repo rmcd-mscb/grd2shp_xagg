@@ -73,6 +73,15 @@ def np_get_wval(ndata, wghts, hru_id=0, verbose=False):
         return tmp
 
 
+def run_weights_by_var(arglist):
+    """Run weights by var."""
+    grd = arglist[0]
+    weights = arglist[1]
+    aggragated = xa.aggregate(grd, weights)
+    xr_agg = prep_for_nc(aggragated)
+    return xr_agg
+
+
 class Grd2ShpXagg:
     """Class to map or interpolate gridded data (netCDF, Grib).
 
@@ -86,7 +95,7 @@ class Grd2ShpXagg:
         self.grd = None
         self.calctype = {0: "area-weighted average", 1: "zonal average"}
         self.type = None
-        self.wieghts = None
+        self.weights = None
         self.wght_id = None
         self.gdf = None
         self.numgeom = 0
@@ -164,7 +173,7 @@ class Grd2ShpXagg:
 
         try:
             with open(wght_file, "rb") as file:
-                self.wieghts = pickle.load(file)  # noqa: S301
+                self.weights = pickle.load(file)  # noqa: S301
         except IOError as ie:
             raise IOError(f"Weight File error: {ie}")
 
@@ -287,26 +296,25 @@ class Grd2ShpXagg:
             )
         self.type = ctype
 
-    def run_weights_by_var(self, index, var):
-        """[summary].
+    def run_weights_pp(self):
+        """Run Weights with ProcessPool."""
+        numvars = len(self.var)
 
-        Args:
-            index ([type]): [description]
-            var ([type]): [description]
-        """
-        print(f"generating mapped vales for {var} ...")
-        grid = self.grd[index]
-        aggragated = xa.aggregate(grid, self.wieghts)
-        xr_agg = prep_for_nc(aggragated)
-        self.mapped_vars[index] = xr_agg
-        print(f"finished mapped values for {var}")
+        arglist = ((self.grd[ei], self.weights) for ei in np.arange(numvars))
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=2) as executor:
+            results = executor.map(run_weights_by_var, arglist)
+
+        for index, r in enumerate(results):
+            # print(index, type(r), r)
+            self.mapped_vars[index] = r
 
     def run_weights(self):
         """Run weights."""
         for index, tvar in enumerate(self.var):
             print(f"generating mapped vales for {tvar} ...")
             grid = self.grd[index]
-            aggragated = xa.aggregate(grid, self.wieghts)
+            aggragated = xa.aggregate(grid, self.weights)
             xr_agg = prep_for_nc(aggragated)
             rename_dict = {self.var[index]: self.var_output[index]}
             xr_agg.rename(rename_dict)
@@ -383,15 +391,15 @@ class Grd2ShpXagg:
         opath = argtuple[1]
         lon = argtuple[2]
         lat = argtuple[3]
-        elev_file = argtuple[4]
+        elev = argtuple[4]
         prefix = argtuple[5]
         punits = argtuple[6]
 
+        postfix = "_" + str(eindex)
+        ncfile = self.create_ncf(
+            opath, lon=lon, lat=lat, prefix=prefix, postfix=postfix
+        )
         for index, tvar in enumerate(self.var_output):
-            postfix = "_" + str(eindex)
-            ncfile = self.create_ncf(
-                opath, lon=lon, lat=lat, prefix=prefix, postfix=postfix
-            )
             vartype = self.mapped_vars[index][self.var[index]].dtype
             ncvar = ncfile.createVariable(tvar, vartype, ("geomid", "time"))
             ncvar.fill_value = netCDF4.default_fillvals["f8"]
@@ -449,11 +457,11 @@ class Grd2ShpXagg:
                     )
                     ncvar.units = conv.units.format_babel()
             else:
-                ncvar[:, :] = (ds.values[:, 0:30],)
+                ncvar[:, :] = ds.values[:, 0:30]
                 ncvar.units = self.grd[index][self.var[index]].units
 
-            elevf = gpd.read_file(elev_file, layer="hru_elev")
-            elev = elevf["hru_elev"].values
+            # elevf = gpd.read_file(elev_file, layer="hru_elev")
+            # elev = elevf["hru_elev"].values
 
             if all(x in self.var_output for x in ["tmax", "tmin", "shum"]):
                 tmax_ind = self.var_output.index("tmax")
@@ -528,47 +536,42 @@ class Grd2ShpXagg:
         print("generating geometry centroid lat lons")
         lon, lat = self.get_centroid_lonlat()
         print("finished generating geometry centroid lat lons")
+        elevf = gpd.read_file(elev_file, layer="hru_elev")
+        elev = elevf["hru_elev"].values
         arglist = (
-            (ei, opath, lon, lat, elev_file, prefix, 0)
+            (ei, opath, lon, lat, elev, prefix, 0)
             for ei in np.arange(self.numensembles)
         )
         if self.threaded:
             print("writing threaded")
-            # with concurrent.futures.ProcessPoolExecutor() as executor:
+            # with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executor:
             #     results = executor.map(self.write_gmcfsv2_ensemble, arglist)
             #     for rs in results:
             #         print(rs)
 
             with concurrent.futures.ThreadPoolExecutor() as executor:
-                futures = []
-                for val in arglist:
-                    t = executor.submit(self.write_gmcfsv2_ensemble, argtuple=val)
-                    futures.append(t)
-                    print(f"future: {t}")
-                for future in concurrent.futures.as_completed(futures):
-                    # future.result()
-                    print(f"finished: {future.result()}")
-                # executor.map((lambda ei: self.write_gmcfsv2_ensemble(ei,
-                #                                                      opath=opath,
-                #                                                      lon=lon,
-                #                                                      lat=lat,
-                #                                                      elev_file=elev_file,
-                #                                                      prefix=prefix,
-                #                                                      punits=0)),
-                #              np.arange(self.numensembles))
+                executor.map(self.write_gmcfsv2_ensemble, arglist)
+            #     # futures = []
+            #     # for val in arglist:
+            #     #     t = executor.submit(self.write_gmcfsv2_ensemble, argtuple=val)
+            #     #     futures.append(t)
+            #     #     print(f"future: {t}")
+            #     # for future in concurrent.futures.as_completed(futures):
+            #     #     # future.result()
+            #     #     print(f"finished: {future.result()}")
+            #     # executor.map((lambda ei: self.write_gmcfsv2_ensemble(ei,
+            #     #                                                      opath=opath,
+            #     #                                                      lon=lon,
+            #     #                                                      lat=lat,
+            #     #                                                      elev_file=elev_file,
+            #     #                                                      prefix=prefix,
+            #     #                                                      punits=0)),
+            #     #              np.arange(self.numensembles))
             return 0
         else:
-            for eindex in np.arange(self.numensembles):
-                print(f"writing serial {eindex}")
-                self.write_gmcfsv2_ensemble(
-                    eindex,
-                    opath=opath,
-                    lon=lon,
-                    lat=lat,
-                    elev_file=elev_file,
-                    prefix=prefix,
-                    punits=0,
-                )
+            for val in arglist:
+                print(f"writing serial {val[0]}, {val}")
+                self.write_gmcfsv2_ensemble(argtuple=val)
 
             return 0
 
@@ -580,7 +583,7 @@ class Grd2ShpXagg:
 
         centroidseries = self.gdf.geometry.centroid.to_crs(epsg=4327)
         tlon, tlat = [list(t) for t in zip(*map(getxy, centroidseries))]
-        return tlon, tlat
+        return np.array(tlon), np.array(tlat)
 
     def create_ncf(self, opath, lon, lat, prefix=None, postfix=None, datetag=None):
         """Create base netCDF file.
@@ -647,16 +650,16 @@ class Grd2ShpXagg:
         hru.long_name = "local model hru id"
         hru[:] = np.asarray(self.gdf.index)
 
-        lat = ncfile.createVariable("hru_lat", np.dtype(np.float32).char, ("geomid",))
-        lat.long_name = "Latitude of HRU centroid"
-        lat.units = "degrees_north"
-        lat.standard_name = "hru_latitude"
-        lat[:] = np.asarray(lat)
+        vlat = ncfile.createVariable("hru_lat", lat.dtype, ("geomid",))
+        vlat.long_name = "latitude of HRU centroid"
+        vlat.units = "degrees_north"
+        vlat.standard_name = "hru_latitude"
+        vlat[:] = lat[:]
 
-        lon = ncfile.createVariable("hru_lon", np.dtype(np.float32).char, ("geomid",))
-        lon.long_name = "Longitude of HRU centroid"
-        lon.units = "degrees_east"
-        lon.standard_name = "hru_longitude"
-        lon[:] = np.asarray(lon)
+        vlon = ncfile.createVariable("hru_lon", lat.dtype, ("geomid",))
+        vlon.long_name = "Longitude of HRU centroid"
+        vlon.units = "degrees_east"
+        vlon.standard_name = "hru_longitude"
+        vlon[:] = lon[:]
 
         return ncfile
