@@ -2,16 +2,16 @@
 import datetime
 import pickle  # noqa: S403
 import sys
-import xagg as xa
 from pathlib import Path
-from xagg.export import prep_for_nc
 
 import geopandas as gpd
 import metpy.calc as mpcalc
 import netCDF4
 import numpy as np
+import xagg as xa
 import xarray as xr
 from metpy.units import units
+from xagg.export import prep_for_nc
 
 # import pandas as pd
 
@@ -468,6 +468,81 @@ class Grd2ShpXagg:
 
             ncfile.close()
 
+    def write_gm_file(self, opath, prefix, punits=0):  # noqa: C901
+        """Write netcdf file.
+
+        Write netCDF file of gridMET climate forcing by variable and ensemble.
+
+        Args:
+            opath ([type]): [description]
+            prefix ([type]): [description]
+            punits (int, optional): [description]. Defaults to 0.
+        """
+        postfix = ""
+        ncfile = self.create_ncf(opath, prefix=prefix, postfix=postfix)
+        for index, tvar in enumerate(self.var_output):
+
+            vartype = self.mapped_vars[index][self.var[index]].dtype
+            ncvar = ncfile.createVariable(tvar, vartype, ("geomid", "time"))
+            ncvar.fill_value = netCDF4.default_fillvals["f8"]
+            ncvar.long_name = self.grd[index][self.var[index]].long_name
+            ncvar.standard_name = self.grd[index][self.var[index]].standard_name
+            ncvar.description = self.grd[index][self.var[index]].description
+            ds = self.mapped_vars[index][self.var[index]]
+            # ncvar.grid_mapping = 'crs'
+            ncvar.units = self.grd[index][self.var[index]].units
+            if tvar in ["tmax", "tmin"]:
+                if punits == 1:
+                    conv = units.degC
+                    ncvar[:, :] = (
+                        units.Quantity(
+                            ds.values[:],
+                            ncvar.units,
+                        )
+                        .to(conv)
+                        .magnitude
+                    )
+                    ncvar.units = conv.format_babel()
+                else:
+                    conv = units.degF
+                    ncvar[:, :] = (
+                        units.Quantity(
+                            ds.values[:],
+                            ncvar.units,
+                        )
+                        .to(conv)
+                        .magnitude
+                    )
+                    ncvar.units = conv.format_babel()
+            elif tvar == "prcp":
+                if punits == 1:
+                    conv = units("mm")
+                    ncvar[:, :] = (
+                        units.Quantity(
+                            ds.values[:],
+                            ncvar.units,
+                        )
+                        .to(conv)
+                        .magnitude
+                    )
+                    ncvar.units = conv.units.format_babel()
+                else:
+                    conv = units("inch")
+                    ncvar[:, :] = (
+                        units.Quantity(
+                            ds.values[:],
+                            ncvar.units,
+                        )
+                        .to(conv)
+                        .magnitude
+                    )
+                    ncvar.units = conv.units.format_babel()
+            else:
+                ncvar[:, :] = (ds.values[:],)
+                ncvar.units = self.grd[index][self.var[index]].units
+
+        ncfile.close()
+
     def create_ncf(self, opath, prefix=None, postfix=None, datetag=None):
         """Create netCDF file.
 
@@ -504,7 +579,10 @@ class Grd2ShpXagg:
         def getxy(pt):
             return pt.x, pt.y
 
-        centroidseries = self.gdf.geometry.centroid.to_crs(epsg=4327)
+        # self.gdf.set_crs(epsg=4327)
+        # self.gdf = self.gdf.to_crs(epsg=5070)
+        centroidseries = self.gdf.geometry.centroid
+        # centroidseries = centroidseries.to_crs(epsg=4327)
         tlon, tlat = [list(t) for t in zip(*map(getxy, centroidseries))]
 
         # Global Attributes
