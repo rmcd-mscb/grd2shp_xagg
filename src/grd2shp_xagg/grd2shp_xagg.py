@@ -376,7 +376,7 @@ class Grd2ShpXagg:
                             .to(conv)
                             .magnitude
                         )
-                        ncvar.units = conv.format_babel()
+                        ncvar.units = conv.format_babel("en_US")
                     else:
                         conv = units.degF
                         ncvar[:, :] = (
@@ -387,7 +387,7 @@ class Grd2ShpXagg:
                             .to(conv)
                             .magnitude
                         )
-                        ncvar.units = conv.format_babel()
+                        ncvar.units = conv.format_babel("en_US")
                 elif tvar == "prcp":
                     if punits == 1:
                         conv = units("mm")
@@ -399,7 +399,7 @@ class Grd2ShpXagg:
                             .to(conv)
                             .magnitude
                         )
-                        ncvar.units = conv.units.format_babel()
+                        ncvar.units = conv.units.format_babel("en_US")
                     else:
                         conv = units("inch")
                         ncvar[:, :] = (
@@ -410,7 +410,7 @@ class Grd2ShpXagg:
                             .to(conv)
                             .magnitude
                         )
-                        ncvar.units = conv.units.format_babel()
+                        ncvar.units = conv.units.format_babel("en_US")
                 else:
                     ncvar[:, :] = (ds.values[:, 0:30],)
                     ncvar.units = self.grd[index][self.var[index]].units
@@ -502,7 +502,7 @@ class Grd2ShpXagg:
                         .to(conv)
                         .magnitude
                     )
-                    ncvar.units = conv.format_babel()
+                    ncvar.units = conv.format_babel("en_US")
                 else:
                     conv = units.degF
                     ncvar[:, :] = (
@@ -513,7 +513,7 @@ class Grd2ShpXagg:
                         .to(conv)
                         .magnitude
                     )
-                    ncvar.units = conv.format_babel()
+                    ncvar.units = conv.format_babel("en_US")
             elif tvar == "prcp":
                 if punits == 1:
                     conv = units("mm")
@@ -525,7 +525,7 @@ class Grd2ShpXagg:
                         .to(conv)
                         .magnitude
                     )
-                    ncvar.units = conv.units.format_babel()
+                    ncvar.units = conv.units.format_babel("en_US")
                 else:
                     conv = units("inch")
                     ncvar[:, :] = (
@@ -536,7 +536,7 @@ class Grd2ShpXagg:
                         .to(conv)
                         .magnitude
                     )
-                    ncvar.units = conv.units.format_babel()
+                    ncvar.units = conv.units.format_babel("en_US")
             else:
                 ncvar[:, :] = (ds.values[:],)
                 ncvar.units = self.grd[index][self.var[index]].units
