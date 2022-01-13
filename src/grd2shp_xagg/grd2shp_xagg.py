@@ -131,8 +131,6 @@ class Grd2ShpXagg:
 
         Raises:
             ValueError: [description]
-            IOError: [description]
-            IOError: [description]
         """
         self.valid_grd(grd)
         self.valid_shp(shp)
@@ -157,13 +155,13 @@ class Grd2ShpXagg:
             with open(wght_file, "rb") as file:
                 self.wieghts = pickle.load(file)  # noqa: S301
         except IOError as ie:
-            raise IOError(f"Weight File error: {ie}")
+            print(f"Weight File error: {ie}")
 
         try:
             self.gdf = shp
             self.gdf.reset_index(drop=True, inplace=True)
         except IOError as ie:
-            raise IOError(f"Geometry File error: {ie}")
+            print(f"Geometry File error: {ie}")
 
         # grab some helpful vars. Assumption is dims are same for all vars!
         self.numvars = len(self.var)
@@ -376,7 +374,7 @@ class Grd2ShpXagg:
                             .to(conv)
                             .magnitude
                         )
-                        ncvar.units = conv.format_babel("en_US")
+                        ncvar.units = conv.format_babel(locale="en_US")
                     else:
                         conv = units.degF
                         ncvar[:, :] = (
@@ -387,7 +385,7 @@ class Grd2ShpXagg:
                             .to(conv)
                             .magnitude
                         )
-                        ncvar.units = conv.format_babel("en_US")
+                        ncvar.units = conv.format_babel(locale="en_US")
                 elif tvar == "prcp":
                     if punits == 1:
                         conv = units("mm")
@@ -399,7 +397,7 @@ class Grd2ShpXagg:
                             .to(conv)
                             .magnitude
                         )
-                        ncvar.units = conv.units.format_babel("en_US")
+                        ncvar.units = conv.units.format_babel(locale="en_US")
                     else:
                         conv = units("inch")
                         ncvar[:, :] = (
@@ -410,7 +408,7 @@ class Grd2ShpXagg:
                             .to(conv)
                             .magnitude
                         )
-                        ncvar.units = conv.units.format_babel("en_US")
+                        ncvar.units = conv.units.format_babel(locale="en_US")
                 else:
                     ncvar[:, :] = (ds.values[:, 0:30],)
                     ncvar.units = self.grd[index][self.var[index]].units
@@ -502,7 +500,7 @@ class Grd2ShpXagg:
                         .to(conv)
                         .magnitude
                     )
-                    ncvar.units = conv.format_babel("en_US")
+                    ncvar.units = conv.format_babel(locale="en_US")
                 else:
                     conv = units.degF
                     ncvar[:, :] = (
@@ -513,7 +511,7 @@ class Grd2ShpXagg:
                         .to(conv)
                         .magnitude
                     )
-                    ncvar.units = conv.format_babel("en_US")
+                    ncvar.units = conv.format_babel(locale="en_US")
             elif tvar == "prcp":
                 if punits == 1:
                     conv = units("mm")
@@ -525,7 +523,7 @@ class Grd2ShpXagg:
                         .to(conv)
                         .magnitude
                     )
-                    ncvar.units = conv.units.format_babel("en_US")
+                    ncvar.units = conv.units.format_babel(locale="en_US")
                 else:
                     conv = units("inch")
                     ncvar[:, :] = (
@@ -536,7 +534,7 @@ class Grd2ShpXagg:
                         .to(conv)
                         .magnitude
                     )
-                    ncvar.units = conv.units.format_babel("en_US")
+                    ncvar.units = conv.units.format_babel(locale="en_US")
             else:
                 ncvar[:, :] = (ds.values[:],)
                 ncvar.units = self.grd[index][self.var[index]].units
