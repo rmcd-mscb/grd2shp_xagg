@@ -8,6 +8,7 @@ import geopandas as gpd
 import metpy.calc as mpcalc
 import netCDF4
 import numpy as np
+import pandas as pd
 import xagg as xa
 import xarray as xr
 from metpy.units import units
@@ -97,11 +98,12 @@ class Grd2ShpXagg:
         self.var_output = None
         self._np_var = None
         self.str_start = None
+        self.str_end = None
+        self.dates = None
         self.numvars = None
         self._start_date = None
         self._end_date = None
         self.current_time = None
-        self.current_time_index = None
         self.mapped_vars = []
 
     def initialize(
@@ -167,6 +169,14 @@ class Grd2ShpXagg:
         self.numvars = len(self.var)
         self.numtimesteps = self.grd[0].dims[self.time_var]
         self.str_start = np.datetime_as_string(self.grd[0][self.time_var][0], unit="D")
+        self.str_end = np.datetime_as_string(
+            self.grd[0][self.time_var][self.numtimesteps - 1], unit="D"
+        )
+        print(type(self.str_start), type(str(self.str_start[0])))
+        print(str(self.str_start), str(self.str_end))
+        self.dates = pd.date_range(
+            start=str(self.str_start), end=str(self.str_end), freq="D"
+        )
         self._start_date = self.grd[0][self.time_var][0]
         self._end_date = self.grd[0][self.time_var][self.numtimesteps - 1]
 
@@ -427,10 +437,10 @@ class Grd2ShpXagg:
                         f"shumind: {shum_ind}"
                     )
 
-                    rel_h = np.zeros((self.current_time_index, self.numgeom))
+                    rel_h = np.zeros((self.numtimesteps, self.numgeom))
                     for j in np.arange(np.int(self.numgeom)):
                         pr = mpcalc.height_to_pressure_std(units.Quantity(elev[j], "m"))
-                        for i in np.arange(np.int(self.current_time_index)):
+                        for i in np.arange(np.int(self.numtimesteps)):
                             dstmax = (
                                 self.mapped_vars[tmax_ind][self.var[tmax_ind]]
                                 .isel(time=eindex)
@@ -602,7 +612,7 @@ class Grd2ShpXagg:
         time.standard_name = "time"
         time.units = "days since " + self.str_start
         time.calendar = "standard"
-        time[:] = np.arange(0, self.current_time_index, dtype=np.float)
+        time[:] = np.arange(0, self.numtimesteps, dtype=np.float)
 
         hru = ncfile.createVariable("geomid", "i", ("geomid",))
         hru.cf_role = "timeseries_id"
