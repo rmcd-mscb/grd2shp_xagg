@@ -549,7 +549,7 @@ class Grd2ShpXagg:
                     )
                     ncvar.units = conv.units.format_babel(locale="en_US")
             else:
-                print(type(ds.values), ds.values.shape)
+                # print(type(ds.values), ds.values.shape)
                 ncvar[:, :] = ds.values[:, :]
                 ncvar.units = self.grd[index][self.var[index]].units
 
