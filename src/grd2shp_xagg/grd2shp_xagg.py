@@ -499,7 +499,10 @@ class Grd2ShpXagg:
             ds = self.mapped_vars[index][self.var[index]]
             # ncvar.grid_mapping = 'crs'
             ncvar.units = self.grd[index][self.var[index]].units
-            if tvar in ["tmax", "tmin"]:
+            if self.var[index] in [
+                "daily_maximum_temperature",
+                "daily_minimum_temperature",
+            ]:
                 if punits == 1:
                     conv = units.degC
                     ncvar[:, :] = (
@@ -522,7 +525,7 @@ class Grd2ShpXagg:
                         .magnitude
                     )
                     ncvar.units = conv.format_babel(locale="en_US")
-            elif tvar == "prcp":
+            elif self.var[index] == "precipitation_amount":
                 if punits == 1:
                     conv = units("mm")
                     ncvar[:, :] = (
@@ -546,7 +549,8 @@ class Grd2ShpXagg:
                     )
                     ncvar.units = conv.units.format_babel(locale="en_US")
             else:
-                ncvar[:, :] = (ds.values[:],)
+                print(type(ds.values), ds.values.shape)
+                ncvar[:, :] = ds.values[:, :]
                 ncvar.units = self.grd[index][self.var[index]].units
 
         ncfile.close()
