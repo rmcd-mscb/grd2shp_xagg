@@ -3,7 +3,7 @@ name: grd2shp_xagg
 channels:
   - conda-forge
 dependencies:
-  - python>=3.8
+  - python>=3.8,<3.10
   - pip
   # Production dependencies defined here (as well as in requirements.txt)
   - click
