@@ -1,7 +1,5 @@
 # Production dependencies, also should be specified in environment.yml
 click
-pygeoapi
-xagg
 pandas
 geopandas
 rasterstats
@@ -11,3 +9,4 @@ bottleneck
 numpy
 metpy
 netcdf4
+xesmf>=0.5.2

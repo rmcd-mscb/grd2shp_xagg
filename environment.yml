@@ -1,5 +1,5 @@
 ---
-name: grd2shp_xagg
+name: grd2shp_xagg_2
 channels:
   - conda-forge
 dependencies:
@@ -7,8 +7,6 @@ dependencies:
   - pip
   # Production dependencies defined here (as well as in requirements.txt)
   - click
-  - pygeoapi
-  - xagg
   - pandas
   - geopandas
   - rasterstats
@@ -18,3 +16,8 @@ dependencies:
   - numpy
   - metpy
   - netcdf4
+  - jupyterlab
+  - hvplot
+  - xesmf>= 0.5.2
+  - pip:
+      - "git+https://github.com/rmcd-mscb/xagg.git@nc_prep_fix"
